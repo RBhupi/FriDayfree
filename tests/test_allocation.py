@@ -10,39 +10,60 @@ from tests.conftest import CHARGE_STRING, add_cost_code, add_project, approve_it
 WEEK = date(2025, 10, 6)
 
 
-def test_create_cost_code_deciphers_the_string(conn, fy):
-    code_id = allocation.create_cost_code(conn, fy["id"], f"  {CHARGE_STRING}\n")
+def test_a_cost_code_stores_exactly_what_you_typed(conn, fy):
+    code_id = allocation.create_cost_code(
+        conn, fy["id"], f"  {CHARGE_STRING}\n", name="  Alpha study  ", prj_code=" PRJ0001234 ",
+        pt_code="PT00567", notes=" ends in March ", expires_on=date(2026, 3, 31))
     code = allocation.list_cost_codes(conn, fy["id"])[0]
     assert code["id"] == code_id
-    assert code["charge_string"] == CHARGE_STRING          # stored verbatim, trimmed
-    assert (code["prj_code"], code["pt_code"]) == ("PRJ0001234", "PT00567")
-    assert code["name"] == "SAMPLE STUDY – ALPHA / Analysis"
+    assert code["charge_string"] == CHARGE_STRING          # stored verbatim, only the ends trimmed
+    assert (code["name"], code["prj_code"], code["pt_code"]) == ("Alpha study", "PRJ0001234", "PT00567")
+    assert (code["notes"], code["expires_on"]) == ("ends in March", date(2026, 3, 31))
     assert code["project_count"] == 0
+
+
+def test_a_cost_code_needs_a_name_and_a_string(conn, fy):
+    with pytest.raises(ValidationError, match="name"):
+        allocation.create_cost_code(conn, fy["id"], CHARGE_STRING, name="  ")
+    with pytest.raises(ValidationError, match="Paste the cost code string"):
+        allocation.create_cost_code(conn, fy["id"], "   ", name="Alpha study")
+
+
+def test_the_form_can_suggest_the_codes_without_deciding_anything(conn):
+    assert allocation.suggest_codes(CHARGE_STRING) == {
+        "prj_code": "PRJ0001234", "pt_code": "PT00567", "name": "SAMPLE STUDY – ALPHA / Analysis"}
+    assert allocation.suggest_codes("nothing recognisable")["prj_code"] == ""
 
 
 def test_same_charge_string_twice_in_one_fy_rejected(conn, fy, cost_code):
     with pytest.raises(ValidationError, match="already set up"):
-        allocation.create_cost_code(conn, fy["id"], CHARGE_STRING)
-    with pytest.raises(ValidationError, match="empty"):
-        allocation.create_cost_code(conn, fy["id"], "  ")
+        allocation.create_cost_code(conn, fy["id"], CHARGE_STRING, name="Another go")
 
 
-def test_add_project_from_string_creates_then_reuses_cost_code(conn, fy):
-    main = allocation.add_project_from_string(conn, fy["id"], "alpha_main", CHARGE_STRING)
-    extra = allocation.add_project_from_string(conn, fy["id"], "alpha_travel", CHARGE_STRING)
-    assert len(allocation.list_cost_codes(conn, fy["id"])) == 1            # one string, shared
+def test_editing_a_cost_code_keeps_every_field(conn, fy, cost_code):
+    allocation.update_cost_code(conn, cost_code, charge_string="202>PRJ0009 - NEW>PT0009: Work",
+                                name="Renamed", prj_code="PRJ0009", pt_code="PT0009", notes="moved",
+                                expires_on=date(2027, 1, 1))
+    code = allocation.get_cost_code(conn, cost_code)
+    assert (code["name"], code["charge_string"], code["expires_on"]) == (
+        "Renamed", "202>PRJ0009 - NEW>PT0009: Work", date(2027, 1, 1))
+
+
+def test_several_projects_share_one_cost_code(conn, fy, cost_code):
+    main = allocation.create_project(conn, cost_code, "alpha_main")
+    extra = allocation.create_project(conn, cost_code, "alpha_travel")
     a, b = allocation.get_project(conn, main), allocation.get_project(conn, extra)
     assert a["cost_code_id"] == b["cost_code_id"]
     assert a["charge_string"] == b["charge_string"] == CHARGE_STRING
 
 
-def test_project_tag_required_and_unique_within_cost_code(conn, fy, cost_code, project):
+def test_a_project_needs_a_tag_and_an_existing_cost_code(conn, fy, cost_code, project):
     with pytest.raises(ValidationError, match="tag"):
         allocation.create_project(conn, cost_code, " ")
     with pytest.raises(ValidationError, match="already exists"):
         allocation.create_project(conn, cost_code, "alpha_main")
-    with pytest.raises(ValidationError, match="tag"):
-        allocation.add_project_from_string(conn, fy["id"], "", CHARGE_STRING)
+    with pytest.raises(ValidationError, match="Pick the cost code"):
+        allocation.create_project(conn, 9999, "orphan")
 
 
 def test_balances_are_zero_without_ledger_rows(conn, fy, project):

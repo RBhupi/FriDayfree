@@ -2,7 +2,8 @@
 import pandas as pd
 import streamlit as st
 
-from fridayfree.modules.changes import ui as workspace
+from fridayfree.modules.changes import ui as plan_ui
+from fridayfree.modules.spending import ui as spending_ui
 from fridayfree.modules.dashboard import charts
 from fridayfree.modules.dashboard import service as dash
 from fridayfree.modules.shared_ui import AppContext, copy_button, export_controls, show_flashes
@@ -164,29 +165,26 @@ def render(ctx: AppContext) -> None:
     st.title(f"Dashboard · {ctx.fy['label']}")
     show_flashes()
 
-    pending = workspace.current_state(ctx).pending_keys
+    planned = plan_ui.planned_items(ctx)
     approved_only = False
-    if pending:
+    if planned:
         info_col, toggle_col = st.columns([3, 1], vertical_alignment="center")
-        info_col.info(f"Numbers include **{len(pending)} change(s) not yet approved** (marked ✎ in the grid below).", icon=":material/edit:")
+        info_col.info(f"These numbers include **{len(planned)} planned hour entr"
+                      f"{'y' if len(planned) == 1 else 'ies'}** that are not approved yet.", icon=":material/edit:")
         approved_only = toggle_col.toggle("Show approved only", key="approved_only")
-    state = workspace.current_state(ctx, approved_only=approved_only)
+    state = plan_ui.current_state(ctx, approved_only=approved_only)
 
     for alert in dash.overdraft_alerts(state):
         st.error(alert, icon="🚨")
 
     if state.balances and dash.totals(state).allocated == 0:
-        st.info("Your projects have no hours yet. In the grid below type each project's hours in **Allocated**, "
-                "then press **Approve** (or use Allocations → Funds).", icon="👇")
+        st.info("Your projects have no hours yet. Go to **Funds**, pick a project, press **Allocate**.", icon="👉")
 
     _panels(ctx, state)
 
-    st.subheader("Plan & log")
-    st.caption("Type the final numbers you want: this week's **Hours**, or a project's **Allocated / Reserved / Frozen**. "
-               "**Save** keeps them as intentions for the week; **Approve** puts everything in the system.")
-    week = workspace.week_picker(ctx, key="dash_week")
-    workspace.workspace_grid(ctx, week, key="dash_grid")
-    workspace.action_bar(ctx, key="dash_bar")
+    st.subheader("This week")
+    week = plan_ui.week_picker(ctx, key="dash_week")
+    spending_ui.week_form(ctx, week, key="dash_week")
 
     _summaries(ctx, state)
     _charts(ctx, state)

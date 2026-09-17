@@ -13,15 +13,28 @@ from fridayfree.modules.settings import service as settings
 from fridayfree.modules.tasks import service as tasks
 from fridayfree.utils.dates import current_week, fy_default_dates, fy_weeks
 
-PROJECTS = [   # tag, charge string (all invented), allocated hours, typical hours per week
-    ("alpha_main", "101>PRJ0001234 - SAMPLE STUDY – ALPHA>General>PT00567: Analysis", 640, 13),
-    ("alpha_travel", "101>PRJ0001234 - SAMPLE STUDY – ALPHA>General>PT00567: Analysis", 80, 0),
-    ("beta_ops", "205>PRJ0004321 - DEMO PROGRAM – BETA>General>PT00890: Field Work", 900, 15),
-    ("beta_workshop", "205>PRJ0004321 - DEMO PROGRAM – BETA>General>PT00890: Field Work", 120, 1),
-    ("gamma_tools", "310>PRJ0007788 - EXAMPLE CAMPAIGN – GAMMA>General>PT00321: Modelling", 420, 7),
-    ("gamma_docs", "310>PRJ0007788 - EXAMPLE CAMPAIGN – GAMMA>General>PT00321: Modelling", 170, 2),
-    ("delta_pilot", "412>PRJ0009900 - PILOT EFFORT – DELTA>General>PT00111: Research", 300, 4),
-    ("admin", "500>PRJ0000001 - Group Overhead>General>PT00001: Administration", 110, 1),
+COST_CODES = [   # name, charge string (all invented), PRJ, PT, notes
+    ("Alpha study", "101>PRJ0001234 - SAMPLE STUDY – ALPHA>General>PT00567: Analysis",
+     "PRJ0001234", "PT00567", "Main analysis funding"),
+    ("Beta programme", "205>PRJ0004321 - DEMO PROGRAM – BETA>General>PT00890: Field Work",
+     "PRJ0004321", "PT00890", None),
+    ("Gamma campaign", "310>PRJ0007788 - EXAMPLE CAMPAIGN – GAMMA>General>PT00321: Modelling",
+     "PRJ0007788", "PT00321", None),
+    ("Pilot effort", "412>PRJ0009900 - PILOT EFFORT – DELTA>General>PT00111: Research",
+     "PRJ0009900", "PT00111", "Sponsor review pending"),
+    ("Group overhead", "500>PRJ0000001 - Group Overhead>General>PT00001: Administration",
+     "PRJ0000001", "PT00001", None),
+]
+
+PROJECTS = [   # tag, cost code name, hours allocated, typical hours per week
+    ("alpha_main", "Alpha study", 640, 13),
+    ("alpha_travel", "Alpha study", 80, 0),
+    ("beta_ops", "Beta programme", 900, 15),
+    ("beta_workshop", "Beta programme", 120, 1),
+    ("gamma_tools", "Gamma campaign", 420, 7),
+    ("gamma_docs", "Gamma campaign", 170, 2),
+    ("delta_pilot", "Pilot effort", 300, 4),
+    ("admin", "Group overhead", 110, 1),
 ]
 
 
@@ -32,15 +45,21 @@ def seed(conn, today: date = None) -> dict:
     fy_id = settings.create_fiscal_year(conn, fy_label, start, end)
     person_id = settings.save_person(conn, fy_id, "Demo Researcher", badge="B00000", rate_dollar=100.0, fte=1.0)
 
-    ids = {tag: allocation.add_project_from_string(conn, fy_id, tag, string) for tag, string, _, _ in PROJECTS}
+    codes = {name: allocation.create_cost_code(conn, fy_id, string, name, prj, pt, notes)
+             for name, string, prj, pt, notes in COST_CODES}
+    ids = {tag: allocation.create_project(conn, codes[code_name], tag)
+           for tag, code_name, _, _ in PROJECTS}
 
-    def approve(items, note=None):
-        changes.save_items(conn, fy_id, items, note=note)
-        changes.approve(conn, fy_id)
+    def do(tag, action, hours, note=None):
+        changes.record_fund_action(conn, fy_id, ids[tag], action, hours, note)
 
-    approve([WorkItem(ids[tag], "allocated", hours) for tag, _, hours, _ in PROJECTS], note="Initial FY allocations")
-    approve([WorkItem(ids["alpha_travel"], "reserved", 40, reason="Conference travel")], note="Hold conference hours")
-    approve([WorkItem(ids["delta_pilot"], "frozen", 60, reason="Pending sponsor review")], note="Pilot partially frozen")
+    for tag, _, hours, _ in PROJECTS:
+        do(tag, "allocate", hours, "Allocation for the year")
+    do("alpha_travel", "reserve", 40, "Conference travel")
+    do("delta_pilot", "freeze", 60, "Pending sponsor review")
+    do("gamma_docs", "deallocate", 20, "Moved to gamma_tools")
+    do("gamma_tools", "allocate", 20, "Moved from gamma_docs")
+    do("beta_ops", "allocate", 60, "Extra funds received")
 
     rng = random.Random(7)
     past_weeks = [w for w in fy_weeks(start, end) if w < current_week(today)]
@@ -50,25 +69,26 @@ def seed(conn, today: date = None) -> dict:
             hours = max(0.0, round((pace + rng.uniform(-3, 3)) * 4) / 4) if pace else 0.0
             if hours:
                 items.append(WorkItem(ids[tag], "week_hours", hours, week, person_id))
-        approve(items)
+        if items:
+            changes.save_items(conn, fy_id, items)
+            changes.approve(conn, fy_id)
     if past_weeks:
         week = past_weeks[len(past_weeks) // 2]
-        approve([WorkItem(ids["beta_ops"], "week_hours", 10, week, person_id, reason="Corrected after timesheet review")])
+        changes.save_items(conn, fy_id, [WorkItem(ids["beta_ops"], "week_hours", 10, week, person_id,
+                                                  reason="Corrected after timesheet review")])
+        changes.approve(conn, fy_id)
 
-    approve([WorkItem(ids["gamma_docs"], "allocated", 150), WorkItem(ids["gamma_tools"], "allocated", 440)],
-            note="Move 20 h from docs to tools")
-
-    # one set of intentions left saved, not approved
+    # this week's hours planned but not approved yet
     changes.save_items(conn, fy_id, [
-        WorkItem(ids["admin"], "allocated", 130, reason="Asked division for 20 more hours"),
-        WorkItem(ids["alpha_travel"], "reserved", 0, reason="Conference is next week"),
-    ], note="To confirm with budget office")
+        WorkItem(ids["alpha_main"], "week_hours", 12, current_week(today), person_id),
+        WorkItem(ids["beta_ops"], "week_hours", 16, current_week(today), person_id),
+    ], note="This week, to approve on Friday")
 
     tasks.add_task(conn, "Submit conference travel request", project_id=ids["alpha_travel"],
                    due_date=today + timedelta(days=10))
     tasks.add_task(conn, "Ask about the pilot freeze", project_id=ids["delta_pilot"], status="in_progress")
     tasks.add_task(conn, "Back up fridayfree.db")
-    return {"fy_id": fy_id, "person_id": person_id, "projects": ids}
+    return {"fy_id": fy_id, "person_id": person_id, "projects": ids, "cost_codes": codes}
 
 
 def main() -> None:

@@ -73,7 +73,20 @@ def move_staging_out_of_database(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def add_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> bool:
+    """Purely additive ALTER TABLE (NULL default), so no table rebuild and no backup is needed."""
+    if column in _columns(conn, table):
+        return False
+    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    conn.commit()
+    return True
+
+
 def run_all(conn: sqlite3.Connection) -> None:
     tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     if "change_sets" in tables:
         move_staging_out_of_database(conn)
+    if "cost_codes" in tables:
+        add_column(conn, "cost_codes", "expires_on", "DATE")
+    if "fiscal_years" in tables:
+        add_column(conn, "fiscal_years", "carried_from_fy_id", "INTEGER REFERENCES fiscal_years(id)")

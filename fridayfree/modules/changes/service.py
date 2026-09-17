@@ -1,8 +1,10 @@
-"""Save / Approve workflow — the only write path to the ledgers.
+"""The only write path to the ledgers. Two ways in, both append-only:
 
-The user edits the FINAL numbers they want (WorkItem.target_value). Nothing is written while editing.
-  save_items  -> persists the items as intentions in <database>.intentions.json (never in the database).
-  approve     -> works out target - approved for each item and appends signed ledger rows.
+  record_fund_action  -> a project action (allocate / deallocate / reserve / unreserve / freeze / unfreeze)
+                         recorded straight away as one signed row.
+  save_items/approve  -> the week's hours: intentions kept in <database>.intentions.json, then approved
+                         together as signed corrections.
+
 Existing ledger rows are never updated or deleted.
 """
 from dataclasses import dataclass, field, replace
@@ -128,24 +130,132 @@ def load_state(conn, fy_id: int, items=()) -> State:
     return _apply(_Approved(conn, fy_id), items)
 
 
-def grid_values(conn, fy_id: int, items, week_start: date, person_id) -> dict:
-    """Editable numbers per project with the given targets applied: {project_id: {field: value, 'note': str}}."""
+def week_values(conn, fy_id: int, items, week_start: date, person_id) -> dict:
+    """{project_id: {'hours': float, 'note': str}} for one week, with the planned items applied."""
     approved = _Approved(conn, fy_id)
-    targets = {i.key: i for i in items}
+    planned = {i.key: i for i in items}
     out = {}
-    for project_id, balance in approved.balances.items():
+    for project_id in approved.balances:
         entry = approved.week.get((person_id, project_id, week_start), {"hours": 0.0, "notes": None})
-        row = {"allocated": balance.allocated, "reserved": balance.reserved, "frozen": balance.frozen,
-               "week_hours": entry["hours"], "note": entry["notes"] or ""}
-        for name in FIELDS:
-            item = targets.get((project_id, name, week_start if name == "week_hours" else None))
-            if item is None:
-                continue
-            row[name] = item.target_value
-            if name == "week_hours" and item.reason:
+        row = {"hours": entry["hours"], "note": entry["notes"] or "", "planned": False}
+        item = planned.get((project_id, "week_hours", week_start))
+        if item is not None:
+            row.update(hours=item.target_value, planned=True)
+            if item.reason:
                 row["note"] = item.reason
         out[project_id] = row
     return out
+
+
+# fund actions ------------------------------------------------------------------------------------
+# Six actions on a project, each recorded immediately as one signed row. A mistake is undone with the
+# opposite action, never by editing what is already written.
+
+FUND_ACTIONS = {                      # action: (entry_type, sign, verb, preposition, what it is limited by)
+    "allocate":   ("fund", +1, "Allocate", "to", None),
+    "deallocate": ("fund", -1, "Deallocate", "from", "free_hours"),
+    "reserve":    ("reserve", +1, "Reserve", "on", "free_hours"),
+    "unreserve":  ("reserve", -1, "Unreserve", "on", "reserved"),
+    "freeze":     ("freeze", +1, "Freeze", "on", "free_hours"),
+    "unfreeze":   ("freeze", -1, "Unfreeze", "on", "frozen"),
+}
+LIMIT_WORD = {"free_hours": "available", "reserved": "currently reserved", "frozen": "currently frozen"}
+
+
+@dataclass(frozen=True)
+class FundResult:
+    change_set_id: int
+    action: str
+    hours: float
+    before: object          # ProjectBalance
+    after: object           # ProjectBalance
+    sentence: str
+    warnings: list
+
+
+def action_sentence(action: str, hours: float, project_name: str) -> str:
+    """The button label and the message afterwards: 'Allocate 40 h to alpha_main'."""
+    _, _, verb, preposition, _ = FUND_ACTIONS[action]
+    return f"{verb} {hours:g} h {preposition} {project_name}"
+
+
+def opposite_action(action: str) -> str:
+    entry_type, sign, *_ = FUND_ACTIONS[action]
+    return next(a for a, (t, s, *_) in FUND_ACTIONS.items() if t == entry_type and s == -sign)
+
+
+def max_hours(balance, action: str) -> float:
+    """How much this action may move, given where the project stands. None-limited actions return inf."""
+    limit = FUND_ACTIONS[action][4]
+    if limit is None:
+        return float("inf")
+    return max(round(getattr(balance, limit), 2), 0.0)
+
+
+def _fund_checks(balance, action: str, hours: float) -> list[str]:
+    errors = []
+    if action not in FUND_ACTIONS:
+        return [f"Unknown action {action!r}."]
+    if hours is None or hours <= 0:
+        errors.append("Enter how many hours, as a positive number.")
+        return errors
+    name, limit = balance.project_name, FUND_ACTIONS[action][4]
+    if action == "allocate" and balance.status == "cancelled":
+        errors.append(f"{name} is cancelled. Set it back to active before allocating hours to it.")
+    if limit is not None:
+        ceiling = max_hours(balance, action)
+        if hours > ceiling + EPSILON:
+            errors.append(
+                f"{name} has {ceiling:g} h {LIMIT_WORD[limit]}; you cannot {action} {hours:g} h."
+            )
+    return errors
+
+
+def preview_fund_action(conn, project_id: int, action: str, hours: float):
+    """(balance as it would be, errors, warnings) — writes nothing."""
+    before = allocation.get_balance(conn, project_id)
+    errors = _fund_checks(before, action, hours)
+    if errors:
+        return before, errors, []
+    entry_type, sign, *_ = FUND_ACTIONS[action]
+    field = {"fund": "allocated", "reserve": "reserved", "freeze": "frozen"}[entry_type]
+    after = replace(before, **{field: round(getattr(before, field) + sign * hours, 2)})
+    warnings = []
+    if after.held > after.allocated + EPSILON:
+        warnings.append(f"{after.project_name}: reserved + frozen ({after.held:g} h) now exceeds its "
+                        f"allocation ({after.allocated:g} h).")
+    if after.status != "active":
+        warnings.append(f"{after.project_name} is {after.status}, so its available hours stay at 0.")
+    return after, errors, warnings
+
+
+def record_fund_action(conn, fy_id: int, project_id: int, action: str, hours: float, note=None) -> FundResult:
+    """Record the action at once: one approval + one signed ledger row, in a single transaction."""
+    before = allocation.get_balance(conn, project_id)
+    after, errors, warnings = preview_fund_action(conn, project_id, action, hours)
+    if errors:
+        raise ValidationError("\n".join(errors))
+    entry_type, sign, *_ = FUND_ACTIONS[action]
+    sentence = action_sentence(action, hours, before.project_name)
+    with conn:
+        change_set_id = repo.insert_approval(conn, fy_id, _clean(note) or sentence)
+        allocation_repo.insert_ledger_row(
+            conn, change_set_id, project_id, entry_type, round(sign * hours, 2), None, _clean(note)
+        )
+    return FundResult(change_set_id, action, hours, before, allocation.get_balance(conn, project_id),
+                      sentence, warnings)
+
+
+def recent_fund_actions(conn, fy_id: int, limit: int = 10) -> list[dict]:
+    """The latest allocation-ledger rows, newest first, each with the action that would undo it."""
+    rows = allocation.list_ledger(conn, fy_id)[:limit]
+    for row in rows:
+        entry_type, hours = row["entry_type"], row["hours"]
+        row["action"] = next(a for a, (t, s, *_) in FUND_ACTIONS.items()
+                             if t == entry_type and s == (1 if hours > 0 else -1))
+        row["undo_action"] = opposite_action(row["action"])
+        row["sentence"] = action_sentence(row["action"], abs(hours), row["project_name"])
+    return rows
 
 
 # validation --------------------------------------------------------------------------------------

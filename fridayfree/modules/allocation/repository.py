@@ -1,4 +1,16 @@
 """SQL only: cost_codes, projects, allocation_ledger and the per-project balance query."""
+from datetime import date
+
+
+def _iso(value):
+    return value.isoformat() if isinstance(value, date) else value
+
+
+def _code(row) -> dict:
+    out = dict(row)
+    out["expires_on"] = date.fromisoformat(out["expires_on"]) if out.get("expires_on") else None
+    return out
+
 
 # Correlated subqueries (not joins) so ledger rows never multiply each other.
 _BALANCE_SQL = """
@@ -19,16 +31,21 @@ _BALANCE_ORDER = " ORDER BY c.name, c.id, p.name"
 
 # cost codes --------------------------------------------------------------------------------------
 
-def insert_cost_code(conn, fy_id, charge_string, prj_code, pt_code, name, notes=None) -> int:
+def insert_cost_code(conn, fy_id, charge_string, prj_code, pt_code, name, notes=None, expires_on=None) -> int:
     cur = conn.execute(
-        "INSERT INTO cost_codes(fy_id, charge_string, prj_code, pt_code, name, notes) VALUES (?, ?, ?, ?, ?, ?)",
-        (fy_id, charge_string, prj_code, pt_code, name, notes),
+        "INSERT INTO cost_codes(fy_id, charge_string, prj_code, pt_code, name, notes, expires_on) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (fy_id, charge_string, prj_code, pt_code, name, notes, _iso(expires_on)),
     )
     return cur.lastrowid
 
 
-def update_cost_code(conn, cost_code_id, name, notes) -> None:
-    conn.execute("UPDATE cost_codes SET name = ?, notes = ? WHERE id = ?", (name, notes, cost_code_id))
+def update_cost_code(conn, cost_code_id, charge_string, prj_code, pt_code, name, notes=None, expires_on=None) -> None:
+    conn.execute(
+        "UPDATE cost_codes SET charge_string = ?, prj_code = ?, pt_code = ?, name = ?, notes = ?, expires_on = ? "
+        "WHERE id = ?",
+        (charge_string, prj_code, pt_code, name, notes, _iso(expires_on), cost_code_id),
+    )
 
 
 def delete_cost_code(conn, cost_code_id) -> None:
@@ -37,14 +54,14 @@ def delete_cost_code(conn, cost_code_id) -> None:
 
 def get_cost_code(conn, cost_code_id):
     row = conn.execute("SELECT * FROM cost_codes WHERE id = ?", (cost_code_id,)).fetchone()
-    return dict(row) if row else None
+    return _code(row) if row else None
 
 
 def get_cost_code_by_string(conn, fy_id, charge_string):
     row = conn.execute(
         "SELECT * FROM cost_codes WHERE fy_id = ? AND charge_string = ?", (fy_id, charge_string)
     ).fetchone()
-    return dict(row) if row else None
+    return _code(row) if row else None
 
 
 def list_cost_codes(conn, fy_id) -> list[dict]:
@@ -53,7 +70,7 @@ def list_cost_codes(conn, fy_id) -> list[dict]:
         "FROM cost_codes c WHERE c.fy_id = ? ORDER BY c.name, c.id",
         (fy_id,),
     )
-    return [dict(r) for r in rows]
+    return [_code(r) for r in rows]
 
 
 # projects ----------------------------------------------------------------------------------------

@@ -42,44 +42,51 @@ A lightweight, local, single-user web app for tracking project cost code allocat
 - [x] Rate and FTE are nullable — hours are always required, dollars are not
 - [x] Schema supports multiple people for v2
 
-### FR-3: Cost Codes (charge strings)
-- [x] A cost code is created by **pasting the Dayforce string**; the app deciphers PRJ code, PT code and a readable name
-- [x] The string is stored verbatim and unique per FY
-- [x] Strings the parser does not recognise are still accepted and copyable
-- [x] Edit name and free-text notes; delete only if none of its projects has hours recorded or planned
-- [x] **Copy button** for the string wherever a cost code appears
+### FR-3: Cost codes — the bucket of funds
+- [x] A cost code is added by hand with **every field asked for**: name, full string, PRJ code, PT code,
+      optional expiry date, notes. PRJ/PT are *offered* from the string but never decided for the user
+- [x] The string is stored verbatim, is unique per fiscal year, and has a **Copy** button everywhere it appears
+- [x] A cost code starts at 0 and has **no action buttons** — it gains funds only because hours are allocated
+      to its projects; its figures are the sum of its projects
+- [x] Edit every field later; delete only when no hours are recorded on any of its projects
+- [x] The card warns when the expiry date is near or past
 
-### FR-4: Projects
-- [x] Add a project with **a tag + a charge string** (pasted new, or picked from existing strings); the cost code is reused or created
-- [x] Rename; set status `active` | `completed` | `cancelled`
-- [x] Delete only if nothing is recorded or planned on it; otherwise cancel (cancelled projects are hidden by default)
-- [x] **Copy-cost-code button per project** (dashboard and Projects page)
-- [x] A new project has 0 hours; hours are set under **Allocations → Funds** (or the dashboard grid)
-- [x] Cost codes can be added on their own (paste the string) and projects added to an existing cost code
+### FR-4: Projects — what the user works with
+- [x] A project has the user's own tag and draws from **exactly one** cost code; many projects may share one
+- [x] Added from the cost code's card or from the Projects page by picking a cost code
+- [x] Rename; set status `active` | `completed` | `cancelled`; delete only when nothing is recorded on it
+- [x] A new project starts with 0 hours — it is given hours with the Allocate action
+- [x] **Copy-cost-code button per project**
 
-### FR-5: Allocation, Reserve, Freeze (append-only)
-- [x] Per project the user edits three final numbers: **Allocated**, **Reserved**, **Frozen**
-- [x] On approval the difference is appended as a signed row: `fund` (+add / −remove), `reserve` (+reserve / −unreserve), `freeze` (+freeze / −unfreeze)
-- [x] A move between projects is "A −10, B +10" approved together (same change set)
-- [x] Reserved hours become chargeable only after unreserving; frozen hours only after unfreezing
-- [x] Reason/note optional on every change
-- [x] Blocked: negative numbers; reserved + frozen greater than the allocation
+### FR-5: Fund actions (append-only, recorded immediately)
+- [x] Six actions, always on a project, always a positive number of hours:
+      **Allocate** (`fund +`), **Deallocate** (`fund −`), **Reserve** (`reserve +`), **Unreserve** (`reserve −`),
+      **Freeze** (`freeze +`), **Unfreeze** (`freeze −`)
+- [x] The button reads as a sentence — "Allocate 40 h to alpha_main" — and the result is shown before pressing
+- [x] Recorded the moment it is pressed: one approval + one signed ledger row, in one transaction
+- [x] Limits: deallocate/reserve/freeze at most the free hours (allocated − spent − reserved − frozen, ignoring
+      status so a finished project's funds can still be reclaimed); unreserve/unfreeze at most what is held;
+      allocating to a cancelled project is refused
+- [x] A note is always optional. Mistakes are corrected with the opposite action, never by editing
+- [x] "Last few fund changes" with an **Undo** shortcut that pre-fills the opposite action to confirm
+- [x] Moving hours between projects is deallocate + allocate (no separate move action)
 
-### FR-6: Weekly Spending (append-only)
-- [x] Week picker: Mon–Sun weeks of the FY up to four weeks ahead, default current week
-- [x] **One net number per project per week**; typing a new total appends the signed difference, typing 0 appends a full reversal
-- [x] Optional note per entry (a note-only change is recorded too)
-- [x] Cannot increase hours on a cancelled project (reductions allowed)
-- [x] Warning (not block) when hours overdraw a project or dip into reserved/frozen hours
+### FR-6: The week (plan, then approve)
+- [x] One box per project for the selected week, with its available hours and a copy button
+- [x] **Save plan** stores the week's intentions in a JSON file outside the database; they survive restarts
+- [x] **Approve week** writes everything at once; **Discard plan** forgets it. Approved data is never affected
+- [x] One total per project per week; a later correction appends the difference; 0 removes the entry
+- [x] Projects left at zero and never touched are not recorded at all
+- [x] Cannot increase hours on a cancelled project; overdraw warns without blocking
 
-### FR-7: Dashboard
-- [x] **Panels, switchable or all at once**: **Total** (available / allocated / spent / reserved / frozen), **By cost code** (available, spent bar, copy button), **By project — what can I charge this week** (by available hours with copy buttons; held projects listed as "do not charge"; overdrawn in red)
-- [x] Banner when numbers include not-yet-approved changes + "Show approved only" toggle
-- [x] **Workspace grid** to edit Allocated / Reserved / Frozen / Hours for the selected week, with live Available and status
-- [x] Per cost code summary: allocated / spent / reserved / frozen / available (and $ if rate set); per project breakdown
-- [x] Color coding, always with a text label: green (>30% remaining) / amber (10–30%) / red (<10% or overdrawn)
-- [x] Charts: weekly burn; available by project; cumulative spend vs allocation with **projected end-of-FY spend** at the average pace of the last 4 completed weeks
-- [x] Overdraft alerts for any overdrawn project or cost code
+### FR-7: Dashboard (read-only, plus this week)
+- [x] Panels switchable or all at once: **Total**, **By cost code** (spent bar, copy button), **By project**
+      (chargeable · held · overdrawn)
+- [x] Banner when the numbers include a plan that is not approved, and a "Show approved only" toggle
+- [x] This week's hours list at the bottom
+- [x] Cost-code and project tables (with $ when a rate is set) and charts: weekly burn, available by project,
+      cumulative spend vs allocation with the end-of-year projection
+- [x] Overdraft alerts
 
 ### FR-8: Export
 - [x] Copy any table as markdown (code block with copy button) and download as `.md`
@@ -89,14 +96,22 @@ A lightweight, local, single-user web app for tracking project cost code allocat
 - [x] Task with title, optional project link, status `todo` | `in_progress` | `done`, optional due date, notes
 - [x] Flat list or grouped by project; inline status change; overdue highlight
 
-### FR-10: Save / Approve workflow
-- [x] Edits in the grid are **unsaved** until the user acts; they survive switching pages within a session
+### FR-10: Plan / approve workflow (weekly hours only)
 - [x] **Save** stores them as intentions in a **JSON file next to the database** (never in the database) — persisted across restarts; each Save replaces the previous plan
 - [x] **Approve** appends the ledger rows for every saved and unsaved change in one transaction, records the approval, then empties the intentions file
 - [x] Typical rhythm: save intended hours during the week, approve once when the week is settled
 - [x] **Discard** forgets saved and unsaved changes; approved data is untouched
-- [x] Sidebar reminder on every page while anything is unsaved or unapproved
-- [x] History page: approved change sets, newest first, collapsed; each expands to its signed rows
+- [x] Sidebar reminder on every page while hours are planned but not approved
+- [x] History page: every recorded entry grouped by approval, newest first, collapsed
+
+### FR-11: Carry forward to the next fiscal year
+- [x] Available only once the year has ended **and** nothing is unapproved in it or in the target year
+- [x] Preview first: cost code, project, left, carries, reserved, frozen, what is already in the new year
+- [x] Rebuilds every cost code and project in the new year and allocates each project's leftover balance,
+      keeping reserved and frozen hours as they were; the person is copied so the new year can log hours
+- [x] Cancelled projects are left behind; overdrawn projects carry 0 and the overdraft stays put;
+      reserved + frozen are trimmed to what is actually left
+- [x] An existing target year is reused and added to; the old year is never modified; cannot be run twice
 
 ---
 

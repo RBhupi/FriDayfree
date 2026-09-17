@@ -7,14 +7,15 @@ Dayforce cost code string for each of your projects. It runs entirely on your ow
 - [2. Start and stop](#2-start-and-stop)
 - [3. Where your data lives](#3-where-your-data-lives)
 - [4. First-time setup](#4-first-time-setup-5-minutes)
-- [5. How do I add allocation (hours) to a project?](#5-how-do-i-add-allocation-hours-to-a-project)
+- [5. Funds: allocate, deallocate, reserve, freeze](#5-funds-allocate-deallocate-reserve-freeze)
 - [6. Your week](#6-your-week)
-- [7. Save, Approve, Discard](#7-save-approve-discard)
+- [7. What is saved when](#7-what-is-saved-when)
 - [8. The pages](#8-the-pages)
-- [9. Backup, restore, move to another computer](#9-backup-restore-move-to-another-computer)
-- [10. Command reference](#10-command-reference)
-- [11. Update or uninstall](#11-update-or-uninstall)
-- [12. Troubleshooting](#12-troubleshooting)
+- [9. End of year: carry forward](#9-end-of-year-carry-forward)
+- [10. Backup, restore, move to another computer](#10-backup-restore-move-to-another-computer)
+- [11. Command reference](#11-command-reference)
+- [12. Update or uninstall](#12-update-or-uninstall)
+- [13. Troubleshooting](#13-troubleshooting)
 
 ---
 
@@ -136,42 +137,53 @@ or discard. Nothing else is stored anywhere (no cloud, no telemetry).
 
 1. **Fiscal year** — the app opens on this screen the first time. The label `FY26` fills in
    Oct 1 2025 → Sep 30 2026 for you. Press **Create fiscal year**.
-2. **Settings → Person / rate** — your name and badge. Hourly rate and FTE are optional; with a rate the
-   dashboard also shows dollars.
-3. **Allocations → Cost codes → Add a cost code** — paste the string exactly as your timesheet system shows
-   it, e.g. `310>PRJ0007788 - EXAMPLE CAMPAIGN – GAMMA>General>PT00321: Modelling` (an invented example).
-   FriDayfree deciphers it (PRJ0007788 · EXAMPLE CAMPAIGN – GAMMA · PT00321 · Modelling) and stores it untouched.
-4. **Add projects to it** — on the cost code's card type your own tag (e.g. `gamma_main`) and press
-   **Add project**. One project has exactly one string; one string can serve many projects.
-   (*Allocations → Projects* does the same in one step: tag + string.)
-5. **Give the projects hours** — see the next section.
+2. **Settings → Person / rate** — your name and badge. Hourly rate and FTE are optional; with a rate you also
+   see dollars.
+3. **Funds → Cost codes → Add a cost code.** A cost code is a **pot of funds**. You are asked for every field:
+
+   | Field | |
+   |---|---|
+   | Name | what you call this pot, e.g. `Gamma campaign` |
+   | Cost code string | exactly as your timesheet system shows it, e.g. `310>PRJ0007788 - EXAMPLE CAMPAIGN – GAMMA>General>PT00321: Modelling` (an invented example). This is what the **Copy** button gives you. |
+   | PRJ code · PT code | offered from the string if they can be recognised — correct them if they are wrong |
+   | Expires on | optional; the card warns when the date is near or past |
+   | Notes | optional |
+
+4. **Add the projects that use it.** On the cost code's card, type your tag (`gamma_main`) and press
+   **Add project**. A project always belongs to exactly one cost code; one cost code can have many projects.
+5. **Give the projects hours** — next section.
 
 ---
 
-## 5. How do I add allocation (hours) to a project?
+## 5. Funds: allocate, deallocate, reserve, freeze
 
-A new project starts with **0 hours**. Open **Allocations → Funds** (the same columns are also in the
-Dashboard grid):
+Everything about money happens on **Funds → Adjust funds**, and always to a **project** (a cost code has no
+buttons of its own — it is just the pot the projects draw from).
 
-1. Find the project's row.
-2. Double-click its **Allocated** cell, type the total hours it should have (e.g. `120`), press Enter.
-   The *Available* column and the dashboard update immediately so you can see the effect.
-3. Press **Approve**. The hours are now in the system.
+1. Pick the **project**.
+2. Pick the **action**.
+3. Type the **hours** (an "All 42 h" button fills in the maximum), optionally a note.
+4. Press the button — it says exactly what it will do, e.g. **“Allocate 40 h to gamma_main”**.
 
-Later changes work the same way — always type the **final number**:
+It is recorded **straight away**. There is no Save or Approve for funds.
 
-| Situation | What to type (then Approve) |
+| Action | What it does |
 |---|---|
-| New funds arrived (+40 h on a 100 h project) | **Allocated** → `140` |
-| Funds were removed | **Allocated** → the new lower number |
-| Move 10 h from project A to B | A **Allocated** −10, B **Allocated** +10, approve together |
-| Hold 40 h for a conference | **Reserved** → `40` (write "conference" in *Note* if you like) |
-| The conference week has come | **Reserved** → `0`; the hours are chargeable again |
-| 60 h were frozen | **Frozen** → `60` |
-| Freeze lifted | **Frozen** → `0` |
+| **Allocate** | Gives the project hours from this cost code. This is how a project gets its funds. |
+| **Deallocate** | Takes hours back off the project. |
+| **Reserve** | Holds hours back for something planned. They stop being available until you unreserve them. |
+| **Unreserve** | Releases held hours so they can be charged again. |
+| **Freeze** | Hours you may not use, e.g. pending a sponsor decision. |
+| **Unfreeze** | Lifts the freeze. |
 
-**Available = Allocated − Spent − Reserved − Frozen.** Reserved and frozen hours are listed under
-*Held — do not charge these hours* until you set them back to 0.
+**Available = allocated − spent − reserved − frozen.** The app never lets you take out more than is there,
+and tells you the limit if you try.
+
+**Made a mistake?** Nothing is ever erased — you do the **opposite action**. The list at the bottom of the
+page, *Last few fund changes*, has an **Undo** button that fills the opposite action in for you; you still
+press the button to confirm.
+
+Moving hours from one project to another is two steps: **Deallocate** from one, **Allocate** to the other.
 
 Colours: 🟢 more than 30 % left · 🟠 10–30 % · 🔴 under 10 % or overdrawn · ⚪ nothing allocated.
 
@@ -179,43 +191,33 @@ Colours: 🟢 more than 30 % left · 🟠 10–30 % · 🔴 under 10 % or overdr
 
 ## 6. Your week
 
-**Any day — plan.** On the **Dashboard** (or *Weekly spending → Log hours*) type the hours you intend to
-charge in the **Hours · wk of …** column and press **Save**. These are *intentions*: they are written to the
-JSON file, survive restarts, show up in the dashboard totals marked ✎, and are **not** in the system.
-Change them as often as you like; each Save replaces the previous plan.
+**During the week — plan.** On **This week** (or at the bottom of the Dashboard) type the hours you intend to
+charge next to each project and press **Save plan**. That is an *intention*: it is written to a JSON file, it
+survives restarts, it shows on the dashboard marked “planned”, and it is **not** in the system yet. Change it
+as often as you like — each Save replaces the last plan.
 
-**While filling in your timesheet.** Press **Copy cost code** next to a project and paste the string.
+**While filling in your timesheet.** Press **Copy code** next to a project and paste.
 
-**Once, when the week is settled — approve.** Press **Approve**. Everything saved and unsaved goes into the
-system in one step and the intentions file is emptied.
+**Once, when the week is settled — approve.** Press **Approve week**. Everything you typed goes into the
+system in one step and the plan file is emptied.
 
-It is **one total per project per week**. Made a mistake after approving? Type the correct total and approve
-again. To remove an entry, type `0`. Another week: pick it in the *Week* box.
+One total per project per week. Fixed a number after approving? Type the correct total and approve again — the
+correction is recorded and the total is right. Type `0` to remove an entry. Projects you leave at 0 and never
+touched are simply not recorded.
 
 ---
 
-## 7. Save, Approve, Discard
+## 7. What is saved when
 
-You always type **the final number you want** — never "+20" or "−3". FriDayfree works out the difference.
+| | Funds actions | Weekly hours |
+|---|---|---|
+| When you press the button | recorded immediately | **Save plan** keeps it in `fridayfree.intentions.json`, outside the database |
+| In the system | at once | after **Approve week** |
+| Undo | the opposite action | change the number, or **Discard plan** before approving |
 
-| Button | Meaning |
-|---|---|
-| *(just typing)* | **Unsaved.** Totals on the page update so you can see the effect, but nothing is stored. Lost if you close the browser. |
-| **Save** | Stored as your **intention** in `fridayfree.intentions.json`. Still there after a restart. **Not in the database, not in the system.** |
-| **Approve** | **Now it is in the system** (written to the database). Approves everything saved *and* unsaved in one go and empties the intentions file. |
-| **Discard** | Forgets saved and unsaved changes. Approved data is never affected. |
-
-While anything is unsaved or unapproved you see a yellow reminder in the sidebar, a ✎ in the grid's
-*Pending* column, and a banner on the dashboard. The dashboard shows the **final state including your
-intentions**; switch on **Show approved only** to see what is officially in the system.
-
-Red messages block Save/Approve (for example reserved + frozen larger than the allocation). Yellow warnings
-(overdrawn, or charging into held hours) do not block — you may need to record what really happened.
-
-**Nothing approved is ever changed or deleted.** Behind the scenes every approval adds signed lines:
-allocation 100 → 120 → 90 is stored as `+100`, `+20`, `−30`; a week 8 → 5 → 0 as `+8`, `−3`, `−5`.
-You normally never see these — only the resulting totals. They are on *Allocations → History* if you
-need an audit trail. A note/reason is always optional.
+**Nothing is ever edited or deleted.** Every change is a new signed line: allocate 100 then 40 more then take
+20 back is stored as `+100`, `+40`, `−20`. You only ever see the resulting totals; the lines themselves are
+under **History → Everything recorded**.
 
 ---
 
@@ -223,24 +225,40 @@ need an audit trail. A note/reason is always optional.
 
 | Page | Use it for |
 |---|---|
-| **Dashboard** | **Panels you switch with *Show*: All panels · Total · Cost codes · Projects** — available hours in total, per cost code (with copy buttons and a spent bar) and per project (what can I charge, held, overdrawn) · the editing grid · cost code and project summaries (with $ when you set a rate) · charts: weekly burn, available by project, cumulative spend vs allocation with an end-of-year projection from your last 4 completed weeks |
-| **Allocations → Funds** | The grid with only Allocated / Reserved / Frozen — add, remove, reserve and freeze hours |
-| **Allocations → Cost codes** | Add a cost code (paste the string) · add projects to it · copy button · edit its display name and notes |
-| **Allocations → Projects** | Add a project (tag + string), rename, set status *active / completed / cancelled*, copy its string. A project can be deleted only while nothing is recorded or planned on it; otherwise set it to *cancelled* (hidden unless you switch on *Show cancelled*) |
-| **Allocations → History** | Every approval, newest first, collapsed; open one to see its signed lines. Filter by cost code or project |
-| **Weekly spending → Log hours** | The hours-only grid with the week's total |
-| **Weekly spending → Spending history** | One line per project per week; *Corrections behind an entry* shows how a number was amended |
-| **Tasks** | A light to-do list, optionally linked to a project, with due dates |
-| **Settings** | Fiscal years · your name, badge, rate, FTE |
+| **Dashboard** | Panels you switch with *Show*: **Total** (available / allocated / spent / reserved / frozen, with dollars if you set a rate) · **By cost code** (available, spent bar, copy button) · **By project** (what you can charge, what is held, what is overdrawn) — then this week's hours, the tables and the charts |
+| **This week** | The weekly list: one hours box per project, Save plan / Approve week |
+| **Funds → Adjust funds** | The six actions, your projects' numbers, and the last few changes with Undo |
+| **Funds → Cost codes** | Add a cost code (all fields), add projects to it, copy its string, edit or delete it |
+| **Funds → Projects** | Rename a project, set it *active / completed / cancelled*, delete an unused one |
+| **History → Everything recorded** | Every entry ever made, grouped by when it was recorded, filterable by cost code or project |
+| **History → Weekly hours** | One line per project per week, with the corrections behind any entry |
+| **Tasks** | A light to-do list, optionally linked to a project |
+| **Settings** | Fiscal years · your name, badge, rate · **Carry forward** |
 
-The **Fiscal year** box in the sidebar switches years. Each year has its own projects and strings
-(the same string can be added again in a new year).
-
-Every table has **Export as markdown**: a copyable block and a **Download .md** button.
+The **Fiscal year** box in the sidebar switches years. Every table has **Export as markdown**.
 
 ---
 
-## 9. Backup, restore, move to another computer
+## 9. End of year: carry forward
+
+**Settings → Carry forward** moves what is left into the new year. It is available once
+
+- the fiscal year has **ended**, and
+- **nothing is left unapproved** in it (or in the year you are carrying into).
+
+You see a preview — cost code, project, what is left, what carries, reserved, frozen — then press
+**Carry forward to FY27**. It rebuilds every cost code and project in the new year and allocates each
+project's leftover hours to it, keeping reserved and frozen hours as they were.
+
+- Cancelled projects are **left behind**; overdrawn projects carry **0** and the overdraft stays in the old year.
+- If the new year already exists (with the same cost codes or projects), the hours are **added** to it — the
+  preview shows what was already there.
+- The old year is never changed, and the same year cannot be carried twice.
+- Tasks stay where they are.
+
+---
+
+## 10. Backup, restore, move to another computer
 
 ```bash
 fridayfree backup
@@ -257,7 +275,7 @@ that), start the app. On a new computer: install FriDayfree, then copy that one 
 
 ---
 
-## 10. Command reference
+## 11. Command reference
 
 | Command | What it does |
 |---|---|
@@ -284,7 +302,7 @@ fridayfree --db /tmp/fridayfree-demo.db
 
 ---
 
-## 11. Update or uninstall
+## 12. Update or uninstall
 
 Update — get the new FriDayfree folder, then:
 
@@ -306,7 +324,7 @@ Neither touches `~/FriDayfree/`. Delete that folder yourself only if you really 
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 | Symptom | Fix |
 |---|---|
@@ -315,8 +333,10 @@ Neither touches `~/FriDayfree/`. Delete that folder yourself only if you really 
 | "Port 8501 is already in use" | Another copy is running — use it, stop it with `Ctrl+C`, or start with `--port 8600` |
 | pip fails with an SSL/certificate error | You are behind a proxy; ask IT for the pip proxy/certificate settings, or install from a network without one |
 | "Something went wrong" on a page | Your data is safe. The details are in `~/FriDayfree/app_errors.log` |
-| The *Hours* column is missing | Fill in *Settings → Person / rate* for that fiscal year |
-| A project shows 0 h available | It has no allocation yet — *Allocations → Funds*, type **Allocated**, **Approve** (section 5) |
-| Cannot delete a project | Hours are recorded or planned on it — set its status to *cancelled* instead |
+| No hours boxes on This week | Fill in *Settings → Person / rate* for that fiscal year |
+| Cannot allocate more than X | That is all the project has left; deallocate elsewhere first, or allocate more to it |
+| Carry forward is greyed out | The year has not ended, or hours are still planned and unapproved (section 9) |
+| A project shows 0 h available | It has no hours yet — Funds → Adjust funds → **Allocate** (section 5) |
+| Cannot delete a project | Hours are recorded on it — set its status to *cancelled* instead (Funds → Projects) |
 | Copy button says "Copy failed" | Select the string in the grey box next to it and copy it manually |
-| I approved a wrong number | Type the right number and approve again; the correction is recorded, the total is right |
+| I approved a wrong number | Weekly hours: type the right number and approve again. Funds: do the opposite action (or press **Undo**). Either way the correction is recorded and the total is right. |

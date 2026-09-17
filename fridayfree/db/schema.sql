@@ -6,10 +6,11 @@
 -- change_sets records each approval; every ledger row points at the approval that wrote it.
 
 CREATE TABLE IF NOT EXISTS fiscal_years (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  label       TEXT NOT NULL UNIQUE,              -- "FY26"
-  start_date  DATE NOT NULL,                     -- "2025-10-01"
-  end_date    DATE NOT NULL,                     -- "2026-09-30"
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  label               TEXT NOT NULL UNIQUE,              -- "FY26"
+  start_date          DATE NOT NULL,                     -- "2025-10-01"
+  end_date            DATE NOT NULL,                     -- "2026-09-30"
+  carried_from_fy_id  INTEGER REFERENCES fiscal_years(id),  -- set on the NEW year by carry forward; NULL = never carried into
   CHECK(start_date < end_date)
 );
 
@@ -23,20 +24,22 @@ CREATE TABLE IF NOT EXISTS people (
   UNIQUE(badge, fy_id)
 );
 
--- One row per Dayforce charge string per FY. The string is stored verbatim so it can be copied back out.
+-- A cost code is the BUCKET of funds: one charge string per fiscal year, stored verbatim so it can be
+-- copied straight back into the timesheet system. Every field is typed by the user.
 CREATE TABLE IF NOT EXISTS cost_codes (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   fy_id          INTEGER NOT NULL REFERENCES fiscal_years(id),
   charge_string  TEXT NOT NULL CHECK(length(trim(charge_string)) > 0),  -- "101>PRJ0001234 - SAMPLE STUDY – ALPHA>General>PT00567: Analysis"
-  prj_code       TEXT NOT NULL DEFAULT '',       -- deciphered: "PRJ0001234"
-  pt_code        TEXT NOT NULL DEFAULT '',       -- deciphered: "PT00567"
-  name           TEXT NOT NULL,                  -- deciphered, editable: "SAMPLE STUDY – ALPHA / Analysis"
+  prj_code       TEXT NOT NULL DEFAULT '',       -- "PRJ0001234"
+  pt_code        TEXT NOT NULL DEFAULT '',       -- "PT00567"
+  name           TEXT NOT NULL,                  -- the user's own name for the bucket
   notes          TEXT,
+  expires_on     DATE,                           -- optional
   UNIQUE(fy_id, charge_string)
 );
 
--- A project is the user's own tag (e.g. "alpha_main"). It has exactly one cost code / charge string;
--- several projects may share the same one.
+-- A project is the user's own tag (e.g. "alpha_main") drawing from exactly one cost code;
+-- several projects may share the same bucket. All fund actions happen on projects, never on cost codes.
 CREATE TABLE IF NOT EXISTS projects (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   cost_code_id  INTEGER NOT NULL REFERENCES cost_codes(id),

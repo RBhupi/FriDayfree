@@ -52,7 +52,7 @@ It opens `http://localhost:8501`. Stop with `Ctrl+C`. It can be started from any
 |---|---|
 | Data folder | `~/FriDayfree/` — created on first start, independent of where you run the command and of the installed package |
 | Database | `~/FriDayfree/fridayfree.db` — everything you have **approved** |
-| Intentions | `~/FriDayfree/fridayfree.intentions.json` — what you have **saved but not approved** (plain JSON, never in the database; removed once approved or discarded) |
+| Plan | `~/FriDayfree/fridayfree.intentions.json` — the week's hours you **saved but have not approved** (plain JSON, never in the database; removed once approved or discarded) |
 | Backups | `~/FriDayfree/backups/` |
 | Error log | `~/FriDayfree/app_errors.log` |
 
@@ -61,17 +61,19 @@ Updating or uninstalling never touches this folder.
 
 ## How it works in one minute
 
-1. Create the fiscal year → Settings → Person → **Allocations → Cost codes**: paste a string such as
-   `205>PRJ0004321 - DEMO PROGRAM – BETA>General>PT00890: Field Work` (invented example) and add projects to it
-   by tag (`beta_main`, `beta_travel` …). Several projects can share a string.
-2. **Allocations → Funds**: type each project's **Allocated** hours → **Approve**. Same place to remove,
-   reserve or freeze hours — always type the *final number you want*.
-3. During the week type the **Hours** you intend to charge and **Save** — intentions go to a JSON file, not the
-   database. When the week is settled press **Approve**: everything goes into the system at once.
-4. The **Dashboard** shows what is available in total, per cost code and per project — switch panels with
-   *Show*, or see them all at once — each with a **Copy cost code** button.
-5. Hours are **append-only**: additions are positive rows, removals negative rows; the database refuses to
-   change or delete them. You see only the resulting totals; the trail is under Allocations → History.
+1. **Funds → Cost codes**: add a cost code — the pot of funds. You type every field: name, the full string to
+   copy, PRJ/PT codes (offered from the string, editable), optional expiry, notes.
+2. On its card, add the **projects** that draw from it (`beta_main`, `beta_travel` …).
+3. **Funds → Adjust funds**: pick a project, pick **Allocate · Deallocate · Reserve · Unreserve · Freeze ·
+   Unfreeze**, type the hours, press the button — which reads *“Allocate 40 h to beta_main”*. It is recorded
+   at once. To undo, do the opposite action (there is an **Undo** shortcut).
+4. **This week**: one hours box per project. **Save plan** during the week (kept in a JSON file, not the
+   database), **Approve week** when it is settled. **Copy code** pastes the cost code into your timesheet.
+5. **Dashboard**: what is available in total, per cost code and per project — switch panels or see them all.
+6. **Settings → Carry forward**: at the end of the year, rebuild everything in the new year with what is left.
+
+Nothing is ever edited or deleted: every change is a new signed line (`+100`, `+40`, `−20`), and you only see
+the totals. The lines are under History.
 
 ## Development
 

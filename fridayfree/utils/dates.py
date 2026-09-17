@@ -45,6 +45,24 @@ def week_label(monday: date) -> str:
     return f"{monday:%b} {monday.day} – {sunday:%b} {sunday.day}, {sunday.year}"
 
 
+def next_fy_label(label: str) -> str:
+    """'FY26' -> 'FY27'. Raises ValueError when the label carries no year."""
+    digits = "".join(ch for ch in label if ch.isdigit())
+    if not digits:
+        raise ValueError(f"Cannot read a year from {label!r}")
+    return label.replace(digits, str(int(digits) + 1).zfill(len(digits)), 1)
+
+
+def next_fy_dates(start: date, end: date, label: str = None) -> tuple[date, date]:
+    """The year after this one: from the label when it has digits, otherwise the next contiguous span."""
+    if label:
+        try:
+            return fy_default_dates(next_fy_label(label))
+        except ValueError:
+            pass
+    return end + timedelta(days=1), end + timedelta(days=1) + (end - start)
+
+
 def fy_default_dates(label: str) -> tuple[date, date]:
     """'FY26' -> (2025-10-01, 2026-09-30). Raises ValueError when the label has no year."""
     digits = "".join(ch for ch in label if ch.isdigit())

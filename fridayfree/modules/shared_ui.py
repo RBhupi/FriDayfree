@@ -34,6 +34,22 @@ def run_action(action, success: str = None) -> bool:
     return True
 
 
+def queue_widget_values(queue_key: str, **values) -> None:
+    """Park values for widgets that already exist this run; apply_queued_values() writes them next run.
+
+    Streamlit refuses `st.session_state[k] = v` once the widget with key k has been created, so anything a
+    button wants to pre-fill has to travel through one rerun.
+    """
+    st.session_state[queue_key] = values
+    st.rerun()
+
+
+def apply_queued_values(queue_key: str, key_for=lambda name: name) -> None:
+    """Call at the top of a page, before any of its widgets are created."""
+    for name, value in (st.session_state.pop(queue_key, None) or {}).items():
+        st.session_state[key_for(name)] = value
+
+
 def flash(message: str) -> None:
     """Queue a success message that survives the next st.rerun()."""
     st.session_state.setdefault("_flash", []).append(message)

@@ -3,7 +3,8 @@
 ## Principles
 
 - **Append-only ledgers**: hours are signed rows (+ add / − remove); nothing written is ever updated or deleted. Enforced by database triggers.
-- **Save ≠ Approve**: edits are *targets* (the final number wanted). Saved = intention, kept in a **JSON file next to the database — never in the database**. Approved = ledger rows appended. One write path.
+- **Two ways in, both append-only**: a **fund action** on a project (allocate / deallocate / reserve / unreserve / freeze / unfreeze) is recorded at once as one signed row; the **week's hours** are planned in a JSON file next to the database and approved together. Nothing else writes to the ledgers.
+- **Cost code = bucket, project = what you work with.** Actions only ever apply to projects; a cost code's figures are the sum of its projects.
 - **Final state only**: every screen shows totals; amendments live on the History page.
 - **SOLID / DRY / YAGNI / TDD**: each layer has one job; one balance formula, one week util, one export function; repositories and services are tested before the UI is wired.
 
@@ -45,9 +46,10 @@ fridayfree/
     settings/    repository.py service.py ui.py     # fiscal_years, people
     allocation/  repository.py service.py ui.py     # cost_codes (charge strings), projects, balance query, ledger read/insert
     spending/    repository.py service.py ui.py     # spending_ledger read/insert, weekly nets
-    changes/     repository.py service.py ui.py     # save · approve · discard · validate · load_state; workspace grid + action bar
+    changes/     repository.py service.py ui.py     # fund actions · save/approve/discard the week · validate · load_state
     dashboard/   service.py charts.py ui.py         # pure aggregations over State; plotly figures
     tasks/       repository.py service.py ui.py
+    carryforward/ repository.py service.py ui.py    # end-of-year carry forward (its own marker + preview)
   utils/
     dates.py                 # week_start, fy_weeks, pickable_weeks, default_week, week_label, fy_default_dates
     formatting.py            # format_hours, format_dollar, to_dollars, risk_color + status palette
@@ -73,8 +75,8 @@ See `fridayfree/db/schema.sql` (authoritative). Summary:
 
 | Table | Kind | Notes |
 |---|---|---|
-| `fiscal_years`, `people` | metadata (mutable) | person is per FY; rate/FTE nullable |
-| `cost_codes` | metadata | `charge_string` verbatim, `UNIQUE(fy_id, charge_string)`; deciphered `prj_code`, `pt_code`, editable `name`, `notes` |
+| `fiscal_years`, `people` | metadata (mutable) | person is per FY; rate/FTE nullable; `carried_from_fy_id` marks a year that was carried into |
+| `cost_codes` | metadata | the bucket: `charge_string` verbatim + `UNIQUE(fy_id, charge_string)`, `prj_code`, `pt_code`, `name`, `notes`, `expires_on` — all typed by the user |
 | `projects` | metadata | user tag, `status`; FY comes from its cost code |
 | `change_sets` | **append-only** | one row per approval (`fy_id`, `note`, `approved_at`); ledger rows point at it |
 | `allocation_ledger` | **append-only** | `entry_type ∈ fund/reserve/freeze`, signed `hours ≠ 0`, `change_set_id`, optional `reason` |
@@ -111,7 +113,20 @@ pct_remaining = available / allocated           (None when nothing allocated →
 ```
 One SQL constant (`_BALANCE_SQL`, correlated `SUM` subqueries so ledger rows never multiply each other) serves per-FY and per-project lookups. Cost code figures are sums over its projects.
 
-### Save / Approve (`changes.service`)
+### Fund actions (`changes.service`)
+```
+FUND_ACTIONS  action -> (entry_type, sign, verb, preposition, limit)
+action_sentence(action, hours, name)     "Allocate 40 h to alpha_main" — the button label
+max_hours(balance, action)               free_hours for allocate-side actions, reserved/frozen for the releases
+preview_fund_action(conn, project, action, hours)   -> (balance as it would be, errors, warnings); writes nothing
+record_fund_action(conn, fy, project, action, hours, note=None)
+    one transaction: insert_approval + one signed insert_ledger_row. No plan, no approval step.
+recent_fund_actions(conn, fy, limit)     the last rows, each with the action that would undo it
+```
+`ProjectBalance.free_hours` (balance − reserved − frozen, **ignoring status**) is what the limits use, so funds
+can still be reclaimed from a completed or cancelled project, while `available` stays 0 for those.
+
+### The week's plan (`changes.service`)
 ```
 WorkItem(project_id, field, target_value, week_start?, person_id?, reason?)     key = (project, field, week)
 merge_items(saved, working)      working (unsaved) overrides saved on the same cell
@@ -123,6 +138,14 @@ approve(conn, fy)                re-validate → one transaction: insert the app
 discard(conn, fy)                clear the JSON entry; database untouched
 ```
 **Errors:** negative target · reserved + frozen > allocated · week not a Monday inside the FY · weekly hours without a person · *raising* hours on a cancelled project.
+
+### Carry forward (`carryforward.service`)
+`plan()` previews (writes nothing); `carry_forward()` does everything in **one transaction, through repositories
+only** — the `create_*` services each open their own `with conn:` and would commit a half-finished carry. Order:
+fiscal year → cost codes (reuse by charge string) → projects (reuse by name) → person → one approval →
+`fund`/`reserve`/`freeze` rows (skipping anything below EPSILON, since the schema forbids 0-hour rows) →
+the `fiscal_years.carried_from_fy_id` marker. Blocked when the year has not ended, when either year has an
+unapproved plan, or when it was already carried.
 **Warnings:** project or cost code overdrawn · spending dips into reserved/frozen hours.
 
 ### Dashboard is pure over `State`
@@ -130,8 +153,11 @@ discard(conn, fy)                clear the JSON entry; database untouched
 
 Projection: average of the last ≤ 4 *completed* weeks (zeros count, current week excluded) × remaining weeks; a remaining week already logged above pace keeps its real hours.
 
-### Workspace grid state
-`approved` (ledgers) → `saved` (intentions JSON) → `working` (`st.session_state`, survives page switches). The grid shows all three merged; after each edit the working store is re-derived from the editor (cells that differ from approved + saved) and the page reruns so every number reflects it. Save/Approve/Discard clear the working store and bump the editor key.
+### Streamlit state
+Only two layers: **approved** (database) and **planned** (intentions JSON). Anything a button wants to pre-fill
+travels through one rerun — `shared_ui.queue_widget_values` / `apply_queued_values` — because Streamlit refuses
+`st.session_state[k] = v` once the widget with key `k` exists in that run (this is what the *Undo*, *Adjust*,
+"All … h" and the post-carry year switch use). Form fields are reset by bumping a nonce in their keys.
 
 ### Risk colours
 `> 30 %` green · `10–30 %` amber · `< 10 %` red · overdrawn red · nothing allocated grey. Status palette (`#0ca30c / #fab219 / #d03b3b`), always paired with a text label.
@@ -147,18 +173,22 @@ Mondays from the week containing FY start to the week containing FY end, capped 
 ## Navigation
 
 ```
-📊 Dashboard                 ← default: panels (Total · Cost codes · Projects, or all) · workspace grid · tables · charts
-Allocations   🧮 Funds · 💰 Cost codes · 🏷️ Projects · 🧾 History
+📊 Dashboard                 ← panels (Total · Cost codes · Projects, or all) · this week · tables · charts
+⏱️ This week                 ← one hours box per project: Save plan / Approve week
+Funds       🧮 Adjust funds · 💰 Cost codes · 🏷️ Projects
+History     🧾 Everything recorded · 🗓️ Weekly hours
 Weekly spending   ⏱️ Log hours · 🗓️ Spending history
 ✅ Tasks
-Settings   📅 Fiscal year · 👤 Person / rate
+Settings   📅 Fiscal year · 👤 Person / rate · 📦 Carry forward
 ```
 
 ---
 
 ## Testing Strategy
 
-Order of development (each step test-first): schema → utils → settings → allocation → spending → **changes** → dashboard service → charts → UI smoke.
+Order of development (each step test-first): schema → utils → settings → allocation → spending → **changes** (fund actions + the week) → carryforward → dashboard service → charts → UI.
+
+The pages that hold real logic are tested with `streamlit.testing.v1.AppTest` (`test_funds_page.py`, `test_week_page.py`, the page tests in `test_carryforward.py`): they click the real buttons and then assert against the database, which is how the late-session-state-write bugs were caught.
 
 - `tests/conftest.py`: in-memory DB, FY26, person, cost code (`101>PRJ0001234 - SAMPLE STUDY – ALPHA>General>PT00567: Analysis`), project `alpha_main`, helper `approve_items`.
 - Ledger immutability is asserted by snapshotting rows before/after every kind of change.
@@ -175,4 +205,5 @@ Order of development (each step test-first): schema → utils → settings → a
 | Hand-entered dollars | nullable `dollars` on ledger rows and change items |
 | Timesheet import | build `WorkItem`s → `save_items` → user reviews → `approve` |
 | Multi-FY comparison | everything is scoped through `cost_codes.fy_id` |
-| Review by someone else | intentions are a portable JSON file; approval is a single service call |
+| Review by someone else | the week's plan is a portable JSON file; approval is a single service call |
+| Dollars on fund actions | `dollars` columns are already there and nullable on both ledgers |

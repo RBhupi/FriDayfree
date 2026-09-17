@@ -8,8 +8,9 @@ from tests.conftest import make_conn
 APP = __import__("pathlib").Path(__file__).resolve().parent.parent / "fridayfree" / "app.py"
 
 PAGES = [
-    "dashboard.render", "allocation.render_funds", "allocation.render_projects", "allocation.render_cost_codes", "allocation.render_history",
-    "spending.render_log_hours", "spending.render_history", "tasks.render", "settings.render_person",
+    "dashboard.render", "allocation.render_funds", "allocation.render_cost_codes", "allocation.render_projects",
+    "allocation.render_history", "spending.render_week", "spending.render_history", "tasks.render",
+    "settings.render_person", "carryforward.render_carry_forward",
 ]
 
 
