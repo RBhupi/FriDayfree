@@ -1,0 +1,2 @@
+# Development install: the app plus pytest
+-e .[dev]

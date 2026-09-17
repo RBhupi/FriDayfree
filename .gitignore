@@ -1,0 +1,9 @@
+.venv/
+*.db
+*.db-journal
+__pycache__/
+.pytest_cache/
+app_errors.log
+.DS_Store
+build/
+*.egg-info/

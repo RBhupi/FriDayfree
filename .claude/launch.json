@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fridayfree-dev",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "fridayfree.cli", "--db", "/tmp/claude-502/fridayfree-dev/fridayfree.db", "--port", "8511", "--no-browser"],
+      "port": 8511
+    }
+  ]
+}

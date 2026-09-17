@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fridayfree"
+version = "1.0.0"
+description = "Local, single-user tracker for cost code allocations and weekly hours, with copyable Dayforce charge strings."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "streamlit>=1.40",
+    "pandas>=2.0",
+    "plotly>=5.18",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+fridayfree = "fridayfree.cli:main"
+fdf = "fridayfree.cli:main"          # short alias, identical
+
+[tool.setuptools.packages.find]
+include = ["fridayfree*"]
+
+[tool.setuptools.package-data]
+"fridayfree.db" = ["schema.sql"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
