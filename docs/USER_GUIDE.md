@@ -23,24 +23,37 @@ Dayforce cost code string for each of your projects. It runs entirely on your ow
 
 You need **Python 3.10 or newer** (`python3 --version`).
 
-Get the FriDayfree folder (clone it or unzip it), then install it with pip **from that folder** into its
-own environment so it cannot disturb your other Python tools:
+## 1. Install
+
+You need **Python 3.10 or newer**.
+
+Clone FriDayfree:
 
 ```bash
-cd /path/to/FriDayfree
+git clone https://github.com/RBhupi/FriDayfree.git
+cd FriDayfree
 ```
+
+Install it:
 
 ```bash
-python3 -m venv ~/.venvs/fridayfree
+python3 -m pip install .
 ```
+
+Start it:
 
 ```bash
-~/.venvs/fridayfree/bin/pip install .
+fridayfree
 ```
 
-That gives you the command `~/.venvs/fridayfree/bin/fridayfree` and its short alias `~/.venvs/fridayfree/bin/fdf`.
-**`fdf` and `fridayfree` are the same program** — wherever this guide says `fridayfree` you can type `fdf`
-(`fdf`, `fdf where`, `fdf backup` …).
+Then open:
+
+```text
+http://localhost:8501
+```
+
+That's it. No separate Python environment is required.
+
 
 To be able to type just `fridayfree` or `fdf` from anywhere, add that folder to your PATH once
 (macOS / Linux, zsh shown — use `~/.bashrc` for bash):
